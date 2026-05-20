@@ -1,0 +1,75 @@
+rules_version = '2';
+
+// Security rules for Fleet Maintenance Tracker.
+//
+// Model: any authenticated user may read and write fleet data
+// (single-tenant app). Anonymous users are blocked from everything.
+// Basic field-shape validation is performed on create.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Vehicles in the fleet.
+    match /vehicles/{vehicleId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.addedBy == request.auth.uid
+        && request.resource.data.keys().hasAll(
+             ['make', 'model', 'year', 'vin', 'licensePlate', 'addedBy']
+           )
+        && request.resource.data.make is string
+        && request.resource.data.model is string
+        && request.resource.data.year is int
+        && request.resource.data.vin is string
+        && request.resource.data.licensePlate is string;
+
+      allow update, delete: if isSignedIn();
+    }
+
+    // Maintenance log entries (one per service event).
+    match /logs/{logId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(
+             ['vehicleID', 'serviceType', 'date', 'mileage', 'cost']
+           )
+        && request.resource.data.vehicleID is string
+        && request.resource.data.serviceType is string
+        && request.resource.data.mileage is int
+        && request.resource.data.cost is number;
+
+      allow update, delete: if isSignedIn();
+    }
+
+    // Reusable service templates (e.g. "Oil change every 5000 mi").
+    match /serviceTemplates/{templateId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(
+             ['serviceName', 'mileageInterval']
+           )
+        && request.resource.data.serviceName is string
+        && request.resource.data.mileageInterval is int;
+
+      allow update, delete: if isSignedIn();
+    }
+
+    // Per-user records. A user may only access and delete their own document
+    // (needed so account deletion can clean up the user's data).
+    match /users/{userId} {
+      allow read, write, delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

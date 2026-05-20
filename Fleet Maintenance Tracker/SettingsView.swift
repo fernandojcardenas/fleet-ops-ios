@@ -16,11 +16,18 @@ struct SettingsView: View {
     @AppStorage("companyName") private var companyName: String = "My Fleet"
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(AuthManager.self) private var authManager
 
     @State private var pickerItem: PhotosPickerItem? = nil
     #if canImport(UIKit)
     @State private var logoImage: UIImage? = nil
     #endif
+
+    @State private var showDeleteConfirm = false
+    @State private var showReauthPrompt = false
+    @State private var reauthPassword: String = ""
+    @State private var deleteErrorMessage: String? = nil
+    @State private var isDeleting = false
 
     var body: some View {
         NavigationStack {
@@ -78,12 +85,48 @@ struct SettingsView: View {
                         Label("Show Onboarding Again", systemImage: "info.circle")
                     }
                 }
+
+                Section("Account") {
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Delete Account", systemImage: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .disabled(isDeleting)
+
+                    if let deleteErrorMessage {
+                        Text(deleteErrorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
             }
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .alert("Delete Account?", isPresented: $showDeleteConfirm) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    Task { await performDeleteAccount() }
+                }
+            } message: {
+                Text("Are you sure you want to permanently delete your account? This action cannot be undone.")
+            }
+            .alert("Confirm Your Password", isPresented: $showReauthPrompt) {
+                SecureField("Password", text: $reauthPassword)
+                    .textContentType(.password)
+                Button("Cancel", role: .cancel) {
+                    reauthPassword = ""
+                }
+                Button("Confirm") {
+                    Task { await performReauthAndDelete() }
+                }
+            } message: {
+                Text("For your security, please re-enter your password to delete your account.")
             }
             #if canImport(UIKit)
             .onAppear { logoImage = CompanyProfile.loadLogo() }
@@ -99,8 +142,48 @@ struct SettingsView: View {
             #endif
         }
     }
+
+    private func performDeleteAccount() async {
+        deleteErrorMessage = nil
+        isDeleting = true
+        defer { isDeleting = false }
+        let result = await authManager.deleteAccount()
+        switch result {
+        case .success:
+            dismiss()
+        case .requiresReauth:
+            showReauthPrompt = true
+        case .failed(let message):
+            deleteErrorMessage = message
+        }
+    }
+
+    private func performReauthAndDelete() async {
+        deleteErrorMessage = nil
+        isDeleting = true
+        defer {
+            isDeleting = false
+            reauthPassword = ""
+        }
+        let password = reauthPassword
+        let reauthed = await authManager.reauthenticate(password: password)
+        guard reauthed else {
+            deleteErrorMessage = authManager.errorMessage ?? "Re-authentication failed."
+            return
+        }
+        let result = await authManager.deleteAccount()
+        switch result {
+        case .success:
+            dismiss()
+        case .requiresReauth:
+            deleteErrorMessage = "Re-authentication is still required. Please log out and back in, then try again."
+        case .failed(let message):
+            deleteErrorMessage = message
+        }
+    }
 }
 
 #Preview {
     SettingsView()
+        .environment(AuthManager())
 }

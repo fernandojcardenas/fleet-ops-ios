@@ -9,6 +9,13 @@ import Foundation
 import Observation
 import FirebaseAuth
 import FirebaseCore
+import FirebaseFirestore
+
+enum DeleteAccountResult {
+    case success
+    case requiresReauth
+    case failed(String)
+}
 
 @MainActor
 @Observable
@@ -64,6 +71,61 @@ class AuthManager {
         } catch {
             self.errorMessage = error.localizedDescription
             logAuthError(error, label: "signUp")
+        }
+    }
+
+    func reauthenticate(password: String) async -> Bool {
+        print("[AuthManager] reauthenticate → attempting")
+        errorMessage = nil
+        guard let currentUser = Auth.auth().currentUser,
+              let email = currentUser.email else {
+            errorMessage = "No signed-in user to re-authenticate."
+            return false
+        }
+        let credential = EmailAuthProvider.credential(withEmail: email, password: password)
+        do {
+            try await currentUser.reauthenticate(with: credential)
+            print("[AuthManager] reauthenticate → success")
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            logAuthError(error, label: "reauthenticate")
+            return false
+        }
+    }
+
+    func deleteAccount() async -> DeleteAccountResult {
+        print("[AuthManager] deleteAccount → attempting")
+        errorMessage = nil
+        guard let currentUser = Auth.auth().currentUser else {
+            let message = "No signed-in user to delete."
+            errorMessage = message
+            return .failed(message)
+        }
+        let uid = currentUser.uid
+
+        // Best-effort cleanup of the user's record in the /users collection.
+        // A failure here should not prevent the auth account from being deleted.
+        do {
+            try await Firestore.firestore().collection("users").document(uid).delete()
+            print("[AuthManager] deleteAccount → users/\(uid) cleanup succeeded")
+        } catch {
+            print("[AuthManager] deleteAccount → users/\(uid) cleanup failed: \(error.localizedDescription)")
+        }
+
+        do {
+            try await currentUser.delete()
+            self.user = nil
+            print("[AuthManager] deleteAccount → success")
+            return .success
+        } catch {
+            let nsError = error as NSError
+            logAuthError(error, label: "deleteAccount")
+            if nsError.code == AuthErrorCode.requiresRecentLogin.rawValue {
+                return .requiresReauth
+            }
+            errorMessage = error.localizedDescription
+            return .failed(error.localizedDescription)
         }
     }
 

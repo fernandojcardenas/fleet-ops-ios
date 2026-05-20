@@ -139,11 +139,11 @@ struct HomeView: View {
                               : "line.3.horizontal.decrease.circle")
                     }
                 }
-                ToolbarItem(placement: .secondaryAction) {
+                ToolbarItem(placement: .primaryAction) {
                     Button {
                         showingSettings = true
                     } label: {
-                        Image(systemName: "gearshape")
+                        Label("Settings", systemImage: "gearshape")
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
