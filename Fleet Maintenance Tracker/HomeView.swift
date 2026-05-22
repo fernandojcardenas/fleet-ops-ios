@@ -19,6 +19,7 @@ struct HomeView: View {
     @State private var sortByHealth = false
     @State private var searchText = ""
     @State private var navPath = NavigationPath()
+    @State private var analyticsPeriod: AnalyticsPeriod = .month
     @AppStorage("showOnlyActive") private var showOnlyActive = false
     @AppStorage("pendingVehicleID") private var pendingVehicleID: String = ""
     @AppStorage("customVehicleOrder") private var customVehicleOrderData: String = ""
@@ -89,14 +90,15 @@ struct HomeView: View {
         NavigationStack(path: $navPath) {
             List {
                 Section("Analytics") {
+                    Picker("Spend Period", selection: $analyticsPeriod) {
+                        Text("Monthly Spend").tag(AnalyticsPeriod.month)
+                        Text("Lifetime Spend").tag(AnalyticsPeriod.lifetime)
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowSeparator(.hidden)
                     LabeledContent(
-                        "This Month",
-                        value: fleetViewModel.totalSpent(in: .month),
-                        format: .currency(code: "USD")
-                    )
-                    LabeledContent(
-                        "Lifetime",
-                        value: fleetViewModel.totalSpent(in: .lifetime),
+                        analyticsPeriod == .month ? "This Month" : "Lifetime",
+                        value: fleetViewModel.totalSpent(in: analyticsPeriod),
                         format: .currency(code: "USD")
                     )
                     LabeledContent("Vehicles in Shop",
@@ -109,7 +111,6 @@ struct HomeView: View {
                             vehicleRow(vehicle)
                         }
                     }
-                    .onDelete(perform: deleteFiltered)
                     .onMove { source, destination in
                         if !sortByHealth {
                             moveVehicles(from: source, to: destination)
@@ -441,14 +442,6 @@ struct HomeView: View {
             .animation(.default, value: status)
     }
 
-    private func deleteFiltered(at offsets: IndexSet) {
-        let idsToDelete = offsets.map { displayedVehicles[$0].id }
-        Task {
-            for id in idsToDelete {
-                _ = await fleetViewModel.deleteVehicleByID(id)
-            }
-        }
-    }
 }
 
 #Preview {
