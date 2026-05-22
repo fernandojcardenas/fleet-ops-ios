@@ -16,6 +16,8 @@ struct MainTabView: View {
                 .tabItem { Label("Fleet", systemImage: "car.2") }
             MaintenanceTabView(fleetViewModel: fleetViewModel)
                 .tabItem { Label("Maintenance", systemImage: "wrench.and.screwdriver") }
+            AnalyticsTabView(fleetViewModel: fleetViewModel)
+                .tabItem { Label("Analytics", systemImage: "chart.bar.fill") }
         }
     }
 }

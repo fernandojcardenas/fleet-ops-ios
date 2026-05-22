@@ -324,7 +324,16 @@ class FleetViewModel {
             return false
         }
         do {
-            try await db.collection("vehicles").document(id).delete()
+            let logsSnapshot = try await db.collection("logs")
+                .whereField("vehicleID", isEqualTo: id)
+                .getDocuments()
+            let batch = db.batch()
+            for doc in logsSnapshot.documents {
+                batch.deleteDocument(doc.reference)
+            }
+            batch.deleteDocument(db.collection("vehicles").document(id))
+            try await batch.commit()
+            logsByVehicleID.removeValue(forKey: id)
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -517,7 +526,11 @@ class FleetViewModel {
     func totalSpent(in period: AnalyticsPeriod) -> Double {
         let calendar = Calendar.current
         let now = Date()
-        let allLogs = logsByVehicleID.values.flatMap { $0 }
+        let activeVehicleIDs = Set(vehicles.map { $0.id })
+        let allLogs = logsByVehicleID
+            .filter { activeVehicleIDs.contains($0.key) }
+            .values
+            .flatMap { $0 }
         return allLogs.filter { log in
             switch period {
             case .month:

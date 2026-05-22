@@ -10,10 +10,12 @@
 		2A4050E22FB4B18F00B4AE81 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 2A4050E12FB4B18F00B4AE81 /* FirebaseAuth */; };
 		2A4050EE2FB4B4C300B4AE81 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 2A4050ED2FB4B4C300B4AE81 /* FirebaseFirestore */; };
 		2A4050FD2FB4FDF200B4AE81 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 2A4050FC2FB4FDF200B4AE81 /* FirebaseStorage */; };
+		2ADA4CC42FC11662008A39F3 /* AnalyticsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ADA4CC32FC11662008A39F3 /* AnalyticsTabView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		2A4050CB2FB4AC3100B4AE81 /* Fleet Maintenance Tracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Fleet Maintenance Tracker.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2ADA4CC32FC11662008A39F3 /* AnalyticsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsTabView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -44,6 +46,7 @@
 				2A4050CD2FB4AC3100B4AE81 /* Fleet Maintenance Tracker */,
 				2A4050E02FB4B18F00B4AE81 /* Frameworks */,
 				2A4050CC2FB4AC3100B4AE81 /* Products */,
+				2ADA4CC32FC11662008A39F3 /* AnalyticsTabView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -142,6 +145,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2ADA4CC42FC11662008A39F3 /* AnalyticsTabView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
