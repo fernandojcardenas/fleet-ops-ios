@@ -43,6 +43,14 @@ struct Vehicle: Codable, Identifiable, Hashable {
     var addedBy: String
     var serviceInterval: Int?
     var status: VehicleStatus?
+    var owner: String?
+    var color: String?
+    var lockboxCode: String?
+    // Persistent QR identifier assigned at creation. Never regenerated.
+    var qrCode: String?
 
     var effectiveStatus: VehicleStatus { status ?? .active }
+
+    // Falls back to id for vehicles created before qrCode existed.
+    var effectiveQRCode: String { qrCode ?? id }
 }

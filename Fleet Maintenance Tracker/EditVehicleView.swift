@@ -17,6 +17,9 @@ struct EditVehicleView: View {
     @State private var year: Int?
     @State private var vin: String
     @State private var licensePlate: String
+    @State private var owner: String
+    @State private var color: String
+    @State private var lockboxCode: String
     @State private var serviceInterval: Int?
     @State private var status: VehicleStatus
     @State private var isSaving: Bool = false
@@ -29,6 +32,9 @@ struct EditVehicleView: View {
         _year = State(initialValue: vehicle.year)
         _vin = State(initialValue: vehicle.vin)
         _licensePlate = State(initialValue: vehicle.licensePlate)
+        _owner = State(initialValue: vehicle.owner ?? "")
+        _color = State(initialValue: vehicle.color ?? "")
+        _lockboxCode = State(initialValue: vehicle.lockboxCode ?? "")
         _serviceInterval = State(initialValue: vehicle.serviceInterval)
         _status = State(initialValue: vehicle.effectiveStatus)
     }
@@ -42,6 +48,12 @@ struct EditVehicleView: View {
                     TextField("Year", value: $year, format: .number.grouping(.never))
                     TextField("VIN", text: $vin)
                     TextField("License Plate", text: $licensePlate)
+                    TextField("Color", text: $color)
+                }
+
+                Section("Ownership & Access") {
+                    TextField("Owner", text: $owner)
+                    TextField("Lockbox Code", text: $lockboxCode)
                 }
 
                 Section("Operational") {
@@ -90,7 +102,11 @@ struct EditVehicleView: View {
             licensePlate: licensePlate,
             addedBy: originalVehicle.addedBy,
             serviceInterval: serviceInterval,
-            status: status
+            status: status,
+            owner: owner,
+            color: color,
+            lockboxCode: lockboxCode,
+            qrCode: originalVehicle.qrCode
         )
         Task {
             let success = await fleetViewModel.updateVehicle(updated)

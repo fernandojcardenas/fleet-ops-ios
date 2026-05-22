@@ -14,8 +14,13 @@ import UIKit
 enum QRGenerator {
     static let deepLinkScheme = "fleetmaintenance"
 
+    // Encodes the vehicle's persistent QR token (UUID at creation, or legacy id) into a deep link.
+    static func deepLink(forToken token: String) -> String {
+        "\(deepLinkScheme)://vehicle/\(token)"
+    }
+
     static func deepLink(forVehicleID id: String) -> String {
-        "\(deepLinkScheme)://vehicle/\(id)"
+        deepLink(forToken: id)
     }
 
     #if canImport(UIKit)

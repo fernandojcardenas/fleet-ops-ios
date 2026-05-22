@@ -20,7 +20,7 @@ struct VehicleQRView: View {
     #endif
 
     private var deepLink: String {
-        QRGenerator.deepLink(forVehicleID: vehicle.id)
+        QRGenerator.deepLink(forToken: vehicle.effectiveQRCode)
     }
 
     var body: some View {

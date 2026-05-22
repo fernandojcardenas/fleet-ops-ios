@@ -16,6 +16,9 @@ struct AddVehicleView: View {
     @State private var year: Int? = nil
     @State private var vin: String = ""
     @State private var licensePlate: String = ""
+    @State private var owner: String = ""
+    @State private var color: String = ""
+    @State private var lockboxCode: String = ""
     @State private var serviceInterval: Int? = 5000
     @State private var status: VehicleStatus = .active
     @State private var isSaving: Bool = false
@@ -29,6 +32,12 @@ struct AddVehicleView: View {
                     TextField("Year", value: $year, format: .number.grouping(.never))
                     TextField("VIN", text: $vin)
                     TextField("License Plate", text: $licensePlate)
+                    TextField("Color", text: $color)
+                }
+
+                Section("Ownership & Access") {
+                    TextField("Owner", text: $owner)
+                    TextField("Lockbox Code", text: $lockboxCode)
                 }
 
                 Section("Operational") {
@@ -76,7 +85,10 @@ struct AddVehicleView: View {
                 vin: vin,
                 licensePlate: licensePlate,
                 serviceInterval: serviceInterval,
-                status: status
+                status: status,
+                owner: owner,
+                color: color,
+                lockboxCode: lockboxCode
             )
             isSaving = false
             if success { dismiss() }

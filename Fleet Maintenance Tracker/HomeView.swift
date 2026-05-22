@@ -21,6 +21,35 @@ struct HomeView: View {
     @State private var navPath = NavigationPath()
     @AppStorage("showOnlyActive") private var showOnlyActive = false
     @AppStorage("pendingVehicleID") private var pendingVehicleID: String = ""
+    @AppStorage("customVehicleOrder") private var customVehicleOrderData: String = ""
+
+    private var customVehicleOrder: [String] {
+        guard let data = customVehicleOrderData.data(using: .utf8),
+              let ids = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return ids
+    }
+
+    private func setCustomVehicleOrder(_ ids: [String]) {
+        if let data = try? JSONEncoder().encode(ids),
+           let str = String(data: data, encoding: .utf8) {
+            customVehicleOrderData = str
+        }
+    }
+
+    // Returns all vehicle ids in their persisted custom order, with any
+    // vehicles not yet in the order appended at the end (in fleet order).
+    private func orderedVehicleIDs() -> [String] {
+        let allIDs = fleetViewModel.vehicles.map { $0.id }
+        let allSet = Set(allIDs)
+        var ordered = customVehicleOrder.filter { allSet.contains($0) }
+        let orderedSet = Set(ordered)
+        for id in allIDs where !orderedSet.contains(id) {
+            ordered.append(id)
+        }
+        return ordered
+    }
 
     private var displayedVehicles: [Vehicle] {
         let filtered = fleetViewModel.vehicles.filter { vehicle in
@@ -44,7 +73,8 @@ struct HomeView: View {
         if sortByHealth {
             return filtered.sorted { healthSortValue(for: $0) < healthSortValue(for: $1) }
         }
-        return filtered
+        let position = Dictionary(uniqueKeysWithValues: orderedVehicleIDs().enumerated().map { ($1, $0) })
+        return filtered.sorted { (position[$0.id] ?? .max) < (position[$1.id] ?? .max) }
     }
 
     private func healthSortValue(for vehicle: Vehicle) -> Int {
@@ -80,6 +110,11 @@ struct HomeView: View {
                         }
                     }
                     .onDelete(perform: deleteFiltered)
+                    .onMove { source, destination in
+                        if !sortByHealth {
+                            moveVehicles(from: source, to: destination)
+                        }
+                    }
                 }
             }
             .overlay {
@@ -110,50 +145,23 @@ struct HomeView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Sign Out") {
-                        authManager.signOut()
-                    }
+                    Button("Sign Out") { authManager.signOut() }
                 }
-                ToolbarItem(placement: .secondaryAction) {
-                    Menu {
-                        Section("Filter") {
-                            Button {
-                                showOnlyDue = false
-                            } label: {
-                                Label("Show All", systemImage: showOnlyDue ? "" : "checkmark")
-                            }
-                            Button {
-                                showOnlyDue = true
-                            } label: {
-                                Label("Due for Service Only", systemImage: showOnlyDue ? "checkmark" : "")
-                            }
-                        }
-                        Section("Sort") {
-                            Toggle(isOn: $sortByHealth) {
-                                Label("Sort by Health", systemImage: "heart.text.square")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: (showOnlyDue || sortByHealth)
-                              ? "line.3.horizontal.decrease.circle.fill"
-                              : "line.3.horizontal.decrease.circle")
-                    }
+                ToolbarItemGroup(placement: .secondaryAction) {
+                    EditButton()
+                    filterMenu
                 }
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
                     Button {
                         showingSettings = true
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
-                }
-                ToolbarItem(placement: .primaryAction) {
                     Button {
                         showingScanner = true
                     } label: {
                         Label("Scan QR", systemImage: "qrcode.viewfinder")
                     }
-                }
-                ToolbarItem(placement: .primaryAction) {
                     Button {
                         showingAddVehicle = true
                     } label: {
@@ -187,6 +195,9 @@ struct HomeView: View {
             .onChange(of: pendingVehicleID) { _, newValue in
                 if !newValue.isEmpty { consumePendingVehicleIDIfNeeded() }
             }
+            .onChange(of: fleetViewModel.vehicles.count) { _, _ in
+                consumePendingVehicleIDIfNeeded()
+            }
             .onDisappear { fleetViewModel.stopListening() }
             .onOpenURL { url in
                 if let id = vehicleID(from: url) {
@@ -196,25 +207,58 @@ struct HomeView: View {
         }
     }
 
-    private func handleScannedValue(_ value: String) {
-        let id: String?
-        if let url = URL(string: value), let parsed = vehicleID(from: url) {
-            id = parsed
-        } else if !value.isEmpty {
-            id = value
-        } else {
-            id = nil
+    private var filterMenu: some View {
+        Menu {
+            Section("Filter") {
+                Button {
+                    showOnlyDue = false
+                } label: {
+                    Label("Show All", systemImage: showOnlyDue ? "" : "checkmark")
+                }
+                Button {
+                    showOnlyDue = true
+                } label: {
+                    Label("Due for Service Only", systemImage: showOnlyDue ? "checkmark" : "")
+                }
+            }
+            Section("Sort") {
+                Toggle(isOn: $sortByHealth) {
+                    Label("Sort by Health", systemImage: "heart.text.square")
+                }
+            }
+        } label: {
+            Image(systemName: (showOnlyDue || sortByHealth)
+                  ? "line.3.horizontal.decrease.circle.fill"
+                  : "line.3.horizontal.decrease.circle")
         }
-        guard let id else { return }
-        checkInVehicleID = id
+    }
+
+    private func handleScannedValue(_ value: String) {
+        let token: String?
+        if let url = URL(string: value), let parsed = tokenFromDeepLink(url) {
+            token = parsed
+        } else if !value.isEmpty {
+            token = value
+        } else {
+            token = nil
+        }
+        guard let token else { return }
+        // Resolve the scanned QR token (persistent UUID) to the underlying vehicle id.
+        // Fall back to the raw token so the check-in screen can render "Vehicle Not Found".
+        checkInVehicleID = fleetViewModel.vehicleID(forScannedToken: token) ?? token
         showingCheckIn = true
     }
 
-    private func vehicleID(from url: URL) -> String? {
+    private func tokenFromDeepLink(_ url: URL) -> String? {
         guard url.scheme == QRGenerator.deepLinkScheme,
               url.host == "vehicle" else { return nil }
-        let id = url.lastPathComponent
-        return id.isEmpty ? nil : id
+        let token = url.lastPathComponent
+        return token.isEmpty ? nil : token
+    }
+
+    private func vehicleID(from url: URL) -> String? {
+        guard let token = tokenFromDeepLink(url) else { return nil }
+        return fleetViewModel.vehicleID(forScannedToken: token) ?? token
     }
 
     private func navigate(to vehicleID: String) {
@@ -223,10 +267,18 @@ struct HomeView: View {
     }
 
     private func consumePendingVehicleIDIfNeeded() {
-        let id = pendingVehicleID
-        guard !id.isEmpty else { return }
+        let token = pendingVehicleID
+        guard !token.isEmpty else { return }
+        // Resolve the pending token (which may be a persistent qrCode) to the real vehicle id.
+        // If the fleet hasn't loaded yet, keep the token in storage and try again next snapshot.
+        guard let resolved = fleetViewModel.vehicleID(forScannedToken: token) else {
+            if !fleetViewModel.vehicles.isEmpty {
+                pendingVehicleID = ""
+            }
+            return
+        }
         pendingVehicleID = ""
-        navigate(to: id)
+        navigate(to: resolved)
     }
 
     private var sectionTitle: String {
@@ -241,27 +293,115 @@ struct HomeView: View {
     @ViewBuilder
     private func vehicleRow(_ vehicle: Vehicle) -> some View {
         let serviceStatus = fleetViewModel.serviceStatus(for: vehicle)
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("\(vehicle.make) \(vehicle.model)")
-                    .font(.headline)
-                statusPill(vehicle.effectiveStatus)
-                ServiceStatusBadge(status: serviceStatus)
-                Spacer()
-                if let mileage = fleetViewModel.latestMileage(for: vehicle.id) {
-                    Text("\(mileage) mi")
+        HStack(alignment: .top, spacing: 12) {
+            colorSwatch(for: vehicle.color)
+                .padding(.top, 4)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("\(String(vehicle.year)) \(vehicle.make) \(vehicle.model)")
+                        .font(.headline)
+                    statusPill(vehicle.effectiveStatus)
+                    ServiceStatusBadge(status: serviceStatus)
+                    Spacer()
+                    if let mileage = fleetViewModel.latestMileage(for: vehicle.id) {
+                        Text("\(mileage) mi")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                ownershipLine(for: vehicle)
+                HStack {
+                    Text(vehicle.licensePlate)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    healthBadge(for: vehicle)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func ownershipLine(for vehicle: Vehicle) -> some View {
+        let owner = vehicle.owner?.trimmingCharacters(in: .whitespaces) ?? ""
+        let color = vehicle.color?.trimmingCharacters(in: .whitespaces) ?? ""
+        if !owner.isEmpty || !color.isEmpty {
+            HStack(spacing: 4) {
+                if !owner.isEmpty {
+                    Image(systemName: "person.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(owner)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if !owner.isEmpty && !color.isEmpty {
+                    Text("·")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if !color.isEmpty {
+                    Text(color)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
-            HStack {
-                Text(vehicle.licensePlate)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                healthBadge(for: vehicle)
+        }
+    }
+
+    private func colorSwatch(for colorName: String?) -> some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(vehicleColor(from: colorName))
+            .frame(width: 18, height: 18)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 0.5)
+            )
+            .accessibilityHidden(true)
+    }
+
+    // Maps a free-form color string entered by the user to a SwiftUI Color.
+    // Unknown values fall back to gray so the swatch is still rendered.
+    private func vehicleColor(from name: String?) -> Color {
+        let trimmed = name?.lowercased().trimmingCharacters(in: .whitespaces) ?? ""
+        switch trimmed {
+        case "black": return .black
+        case "white": return .white
+        case "silver", "grey", "gray": return Color(.systemGray3)
+        case "red": return .red
+        case "blue": return .blue
+        case "navy", "dark blue": return Color(red: 0.05, green: 0.15, blue: 0.45)
+        case "green": return .green
+        case "yellow": return .yellow
+        case "orange": return .orange
+        case "brown": return .brown
+        case "tan", "beige", "cream": return Color(red: 0.93, green: 0.85, blue: 0.70)
+        case "purple", "violet": return .purple
+        case "pink": return .pink
+        case "gold": return Color(red: 0.83, green: 0.66, blue: 0.20)
+        case "maroon", "burgundy": return Color(red: 0.50, green: 0.05, blue: 0.13)
+        default: return .gray
+        }
+    }
+
+    private func moveVehicles(from source: IndexSet, to destination: Int) {
+        var displayed = displayedVehicles
+        displayed.move(fromOffsets: source, toOffset: destination)
+        let newDisplayedIDs = displayed.map { $0.id }
+
+        // Stitch the reordered displayed IDs back into the master order,
+        // leaving non-displayed vehicles in their existing positions.
+        let displayedSet = Set(displayedVehicles.map { $0.id })
+        var queue = newDisplayedIDs
+        var newMaster: [String] = []
+        for id in orderedVehicleIDs() {
+            if displayedSet.contains(id), !queue.isEmpty {
+                newMaster.append(queue.removeFirst())
+            } else {
+                newMaster.append(id)
             }
         }
+        setCustomVehicleOrder(newMaster)
     }
 
     @ViewBuilder

@@ -238,7 +238,10 @@ class FleetViewModel {
                     vin: String,
                     licensePlate: String,
                     serviceInterval: Int?,
-                    status: VehicleStatus) async -> Bool {
+                    status: VehicleStatus,
+                    owner: String,
+                    color: String,
+                    lockboxCode: String) async -> Bool {
         errorMessage = nil
         guard let uid = Auth.auth().currentUser?.uid else {
             errorMessage = "You must be signed in to add a vehicle."
@@ -251,7 +254,11 @@ class FleetViewModel {
             vin: vin, licensePlate: licensePlate,
             addedBy: uid,
             serviceInterval: serviceInterval,
-            status: status
+            status: status,
+            owner: owner,
+            color: color,
+            lockboxCode: lockboxCode,
+            qrCode: UUID().uuidString
         )
         do {
             try docRef.setData(from: vehicle)
@@ -285,8 +292,15 @@ class FleetViewModel {
             errorMessage = "Vehicle is missing an id."
             return false
         }
+        // qrCode is locked at creation. Preserve the existing value to prevent rotation.
+        var toSave = vehicle
+        if let existing = vehicles.first(where: { $0.id == vehicle.id })?.qrCode {
+            toSave.qrCode = existing
+        } else if toSave.qrCode == nil {
+            toSave.qrCode = UUID().uuidString
+        }
         do {
-            try db.collection("vehicles").document(vehicle.id).setData(from: vehicle, merge: true)
+            try db.collection("vehicles").document(vehicle.id).setData(from: toSave, merge: true)
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -357,6 +371,48 @@ class FleetViewModel {
         }
     }
 
+    func updateLog(_ log: MaintenanceLog,
+                   newReceiptImageData: Data? = nil) async -> Bool {
+        errorMessage = nil
+        guard !log.id.isEmpty else {
+            errorMessage = "Log is missing an id."
+            return false
+        }
+
+        var toSave = log
+        if let newReceiptImageData {
+            do {
+                toSave.receiptURL = try await uploadReceipt(data: newReceiptImageData)
+            } catch {
+                errorMessage = "Receipt upload failed: \(error.localizedDescription)"
+                return false
+            }
+        }
+
+        do {
+            try db.collection("logs").document(toSave.id).setData(from: toSave, merge: true)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteLog(_ log: MaintenanceLog) async -> Bool {
+        errorMessage = nil
+        guard !log.id.isEmpty else {
+            errorMessage = "Log is missing an id."
+            return false
+        }
+        do {
+            try await db.collection("logs").document(log.id).delete()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func fetchLogs(for vehicleID: String) -> [MaintenanceLog] {
         logsByVehicleID[vehicleID] ?? []
     }
@@ -369,6 +425,17 @@ class FleetViewModel {
         serviceTemplates
             .filter { $0.assignedVehicleIDs.contains(vehicleID) }
             .sorted { $0.serviceName.localizedCaseInsensitiveCompare($1.serviceName) == .orderedAscending }
+    }
+
+    // Resolves a scanned token (either a persistent qrCode or a legacy id) to a vehicle id.
+    func vehicleID(forScannedToken token: String) -> String? {
+        if let match = vehicles.first(where: { $0.qrCode == token }) {
+            return match.id
+        }
+        if vehicles.contains(where: { $0.id == token }) {
+            return token
+        }
+        return nil
     }
 
     enum FleetHealth: Hashable {

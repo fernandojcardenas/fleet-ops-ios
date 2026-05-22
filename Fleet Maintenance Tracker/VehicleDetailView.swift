@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct VehicleDetailView: View {
     let vehicleID: String
@@ -16,10 +19,16 @@ struct VehicleDetailView: View {
     @State private var showingAddLog = false
     @State private var showingDeleteConfirmation = false
     @State private var receiptLog: MaintenanceLog? = nil
+    @State private var editingLog: MaintenanceLog? = nil
+    @State private var logPendingDeletion: MaintenanceLog? = nil
     @State private var pdfURL: URL? = nil
     @State private var showingShareSheet = false
     @State private var showingQR = false
     @State private var isExporting = false
+    #if canImport(UIKit)
+    @State private var inlineQRImage: UIImage? = nil
+    @State private var showingShareQR = false
+    #endif
     @AppStorage("companyName") private var companyName: String = "My Fleet"
 
     private var vehicle: Vehicle? {
@@ -38,10 +47,18 @@ struct VehicleDetailView: View {
                         LabeledContent("Make", value: vehicle.make)
                         LabeledContent("Model", value: vehicle.model)
                         LabeledContent("Year", value: String(vehicle.year))
+                        LabeledContent("Color", value: displayValue(vehicle.color))
                     }
                     Section("Identification") {
                         LabeledContent("VIN", value: vehicle.vin)
                         LabeledContent("License Plate", value: vehicle.licensePlate)
+                    }
+                    Section("Ownership & Access") {
+                        LabeledContent("Owner", value: displayValue(vehicle.owner))
+                        LabeledContent("Lockbox Code", value: displayValue(vehicle.lockboxCode))
+                    }
+                    Section("Vehicle QR Code") {
+                        inlineQRSection(for: vehicle)
                     }
                     Section("Operational Status") {
                         Picker("Status", selection: statusBinding(for: vehicle)) {
@@ -92,6 +109,31 @@ struct VehicleDetailView: View {
                                     logRow(log)
                                 }
                                 .buttonStyle(.plain)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(role: .destructive) {
+                                        logPendingDeletion = log
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                    Button {
+                                        editingLog = log
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+                                    .tint(.blue)
+                                }
+                                .contextMenu {
+                                    Button {
+                                        editingLog = log
+                                    } label: {
+                                        Label("Edit Log", systemImage: "pencil")
+                                    }
+                                    Button(role: .destructive) {
+                                        logPendingDeletion = log
+                                    } label: {
+                                        Label("Delete Log", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
                         Button {
@@ -102,11 +144,6 @@ struct VehicleDetailView: View {
                     }
 
                     Section {
-                        Button {
-                            showingQR = true
-                        } label: {
-                            Label("Generate Vehicle QR", systemImage: "qrcode")
-                        }
                         Button {
                             exportServiceHistory(vehicle: vehicle)
                         } label: {
@@ -158,6 +195,25 @@ struct VehicleDetailView: View {
                     if let urlString = log.receiptURL, let url = URL(string: urlString) {
                         ReceiptViewer(url: url)
                     }
+                }
+                .sheet(item: $editingLog) { log in
+                    EditLogView(log: log, fleetViewModel: fleetViewModel)
+                }
+                .alert("Delete Log?",
+                       isPresented: Binding(
+                            get: { logPendingDeletion != nil },
+                            set: { if !$0 { logPendingDeletion = nil } }
+                       ),
+                       presenting: logPendingDeletion) { log in
+                    Button("Cancel", role: .cancel) { logPendingDeletion = nil }
+                    Button("Delete", role: .destructive) {
+                        Task {
+                            _ = await fleetViewModel.deleteLog(log)
+                            logPendingDeletion = nil
+                        }
+                    }
+                } message: { _ in
+                    Text("Are you sure you want to delete this maintenance log? This action cannot be undone.")
                 }
                 #if canImport(UIKit)
                 .sheet(isPresented: $showingShareSheet) {
@@ -266,6 +322,79 @@ struct VehicleDetailView: View {
                 .background(health.color, in: Capsule())
                 .foregroundStyle(.white)
         }
+    }
+
+    private func displayValue(_ value: String?) -> String {
+        guard let value, !value.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return "—"
+        }
+        return value
+    }
+
+    @ViewBuilder
+    private func inlineQRSection(for vehicle: Vehicle) -> some View {
+        VStack(spacing: 12) {
+            #if canImport(UIKit)
+            Group {
+                if let inlineQRImage {
+                    Image(uiImage: inlineQRImage)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    ProgressView()
+                }
+            }
+            .frame(width: 220, height: 220)
+            .padding(12)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            #else
+            Image(systemName: "qrcode")
+                .font(.system(size: 120))
+                .foregroundStyle(.secondary)
+                .frame(width: 220, height: 220)
+            #endif
+
+            Text("Scan to open this vehicle on another device.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 16) {
+                Button {
+                    showingQR = true
+                } label: {
+                    Label("View Larger", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .buttonStyle(.bordered)
+
+                #if canImport(UIKit)
+                Button {
+                    showingShareQR = true
+                } label: {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
+                .disabled(inlineQRImage == nil)
+                #endif
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        #if canImport(UIKit)
+        .onAppear {
+            if inlineQRImage == nil {
+                let link = QRGenerator.deepLink(forToken: vehicle.effectiveQRCode)
+                inlineQRImage = QRGenerator.image(from: link)
+            }
+        }
+        .sheet(isPresented: $showingShareQR) {
+            if let inlineQRImage {
+                ActivityView(activityItems: [inlineQRImage])
+            }
+        }
+        #endif
     }
 
     @ViewBuilder
