@@ -718,6 +718,14 @@ class FleetViewModel {
         vehicles.filter { $0.effectiveStatus == .inShop }.count
     }
 
+    var ongoingTripsCount: Int {
+        let activeVehicleIDs = Set(vehicles.map { $0.id })
+        let ongoingVehicleIDs = trips
+            .filter { $0.effectiveIsOngoing && activeVehicleIDs.contains($0.vehicleID) }
+            .map { $0.vehicleID }
+        return Set(ongoingVehicleIDs).count
+    }
+
     func totalSpent(in period: AnalyticsPeriod) -> Double {
         let calendar = Calendar.current
         let now = Date()

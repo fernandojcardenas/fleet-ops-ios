@@ -107,6 +107,8 @@ struct HomeView: View {
                     )
                     LabeledContent("Vehicles in Shop",
                                    value: "\(fleetViewModel.vehiclesInRepairCount)")
+                    LabeledContent("Vehicles on Active Trips",
+                                   value: "\(fleetViewModel.ongoingTripsCount)")
                 }
 
                 Section(sectionTitle) {
