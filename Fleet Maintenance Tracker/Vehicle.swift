@@ -33,6 +33,23 @@ enum VehicleStatus: String, Codable, CaseIterable, Hashable {
     }
 }
 
+// Supplementary operational indicator. Independent of the vehicle's
+// health/maintenance status — a vehicle can be "In Shop" and "Available",
+// or "Active" and "On a trip".
+enum OperationalStatus: String, Codable, CaseIterable, Hashable {
+    case available = "Available"
+    case onTrip = "On a trip"
+
+    var displayName: String { rawValue }
+
+    var color: Color {
+        switch self {
+        case .available: return .teal
+        case .onTrip: return .indigo
+        }
+    }
+}
+
 struct Vehicle: Codable, Identifiable, Hashable {
     var id: String
     var make: String
@@ -48,8 +65,11 @@ struct Vehicle: Codable, Identifiable, Hashable {
     var lockboxCode: String?
     // Persistent QR identifier assigned at creation. Never regenerated.
     var qrCode: String?
+    var operationalStatus: OperationalStatus? = nil
 
     var effectiveStatus: VehicleStatus { status ?? .active }
+
+    var effectiveOperationalStatus: OperationalStatus { operationalStatus ?? .available }
 
     // Falls back to id for vehicles created before qrCode existed.
     var effectiveQRCode: String { qrCode ?? id }

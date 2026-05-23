@@ -13,8 +13,12 @@ struct HomeView: View {
     @State private var showingAddVehicle = false
     @State private var showingSettings = false
     @State private var showingScanner = false
-    @State private var showingCheckIn = false
-    @State private var checkInVehicleID: String? = nil
+    // Routing state for the post-scan action dialog and the three target sheets.
+    @State private var scannedVehicleID: String? = nil
+    @State private var showingScanRouter = false
+    @State private var showingTripStart = false
+    @State private var showingTripEnd = false
+    @State private var showingMaintenanceLog = false
     @State private var showOnlyDue = false
     @State private var sortByHealth = false
     @State private var searchText = ""
@@ -183,9 +187,33 @@ struct HomeView: View {
                 }
             }
             #endif
-            .sheet(isPresented: $showingCheckIn) {
-                if let checkInVehicleID {
-                    VehicleCheckInView(vehicleID: checkInVehicleID, fleetViewModel: fleetViewModel)
+            .confirmationDialog(
+                scannedDialogTitle,
+                isPresented: $showingScanRouter,
+                titleVisibility: .visible
+            ) {
+                Button("Trip Start") { showingTripStart = true }
+                Button("Trip End") { showingTripEnd = true }
+                Button("Maintenance") { showingMaintenanceLog = true }
+                Button("Cancel", role: .cancel) {
+                    scannedVehicleID = nil
+                }
+            } message: {
+                Text("Choose an action for this vehicle.")
+            }
+            .sheet(isPresented: $showingTripStart, onDismiss: { scannedVehicleID = nil }) {
+                if let scannedVehicleID {
+                    TripStartView(vehicleID: scannedVehicleID, fleetViewModel: fleetViewModel)
+                }
+            }
+            .sheet(isPresented: $showingTripEnd, onDismiss: { scannedVehicleID = nil }) {
+                if let scannedVehicleID {
+                    TripEndView(vehicleID: scannedVehicleID, fleetViewModel: fleetViewModel)
+                }
+            }
+            .sheet(isPresented: $showingMaintenanceLog, onDismiss: { scannedVehicleID = nil }) {
+                if let scannedVehicleID {
+                    AddLogView(vehicleID: scannedVehicleID, fleetViewModel: fleetViewModel)
                 }
             }
             .searchable(text: $searchText, prompt: "Make, model, plate, or VIN")
@@ -235,19 +263,28 @@ struct HomeView: View {
     }
 
     private func handleScannedValue(_ value: String) {
+        // Standardized QR payload is the raw vehicle document id.
+        // Legacy deep-link QRs (fleetmaintenance://vehicle/<token>) are still parsed
+        // so existing printed codes keep working.
         let token: String?
         if let url = URL(string: value), let parsed = tokenFromDeepLink(url) {
             token = parsed
-        } else if !value.isEmpty {
-            token = value
         } else {
-            token = nil
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            token = trimmed.isEmpty ? nil : trimmed
         }
         guard let token else { return }
-        // Resolve the scanned QR token (persistent UUID) to the underlying vehicle id.
-        // Fall back to the raw token so the check-in screen can render "Vehicle Not Found".
-        checkInVehicleID = fleetViewModel.vehicleID(forScannedToken: token) ?? token
-        showingCheckIn = true
+        let resolved = fleetViewModel.vehicleID(forScannedToken: token) ?? token
+        scannedVehicleID = resolved
+        showingScanRouter = true
+    }
+
+    private var scannedDialogTitle: String {
+        guard let id = scannedVehicleID,
+              let vehicle = fleetViewModel.vehicles.first(where: { $0.id == id }) else {
+            return "Vehicle Not Found"
+        }
+        return "\(vehicle.make) \(vehicle.model) · \(vehicle.licensePlate)"
     }
 
     private func tokenFromDeepLink(_ url: URL) -> String? {
@@ -302,6 +339,7 @@ struct HomeView: View {
                     Text("\(String(vehicle.year)) \(vehicle.make) \(vehicle.model)")
                         .font(.headline)
                     statusPill(vehicle.effectiveStatus)
+                    operationalPill(vehicle.effectiveOperationalStatus)
                     ServiceStatusBadge(status: serviceStatus)
                     Spacer()
                     if let mileage = fleetViewModel.latestMileage(for: vehicle.id) {
@@ -439,6 +477,17 @@ struct HomeView: View {
             .padding(.vertical, 2)
             .background(status.color, in: Capsule())
             .foregroundStyle(.white)
+            .animation(.default, value: status)
+    }
+
+    @ViewBuilder
+    private func operationalPill(_ status: OperationalStatus) -> some View {
+        Text(status.displayName)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(status.color.opacity(0.18), in: Capsule())
+            .foregroundStyle(status.color)
             .animation(.default, value: status)
     }
 

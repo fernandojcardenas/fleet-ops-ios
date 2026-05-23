@@ -19,8 +19,8 @@ struct VehicleQRView: View {
     @State private var showingShare = false
     #endif
 
-    private var deepLink: String {
-        QRGenerator.deepLink(forToken: vehicle.effectiveQRCode)
+    private var qrPayload: String {
+        QRGenerator.qrContent(for: vehicle)
     }
 
     var body: some View {
@@ -49,7 +49,7 @@ struct VehicleQRView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text(deepLink)
+                Text(qrPayload)
                     .font(.footnote.monospaced())
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -77,7 +77,7 @@ struct VehicleQRView: View {
             #if canImport(UIKit)
             .onAppear {
                 if qrImage == nil {
-                    qrImage = QRGenerator.image(from: deepLink)
+                    qrImage = QRGenerator.image(from: qrPayload)
                 }
             }
             .sheet(isPresented: $showingShare) {

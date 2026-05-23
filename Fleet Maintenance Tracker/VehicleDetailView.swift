@@ -385,8 +385,7 @@ struct VehicleDetailView: View {
         #if canImport(UIKit)
         .onAppear {
             if inlineQRImage == nil {
-                let link = QRGenerator.deepLink(forToken: vehicle.effectiveQRCode)
-                inlineQRImage = QRGenerator.image(from: link)
+                inlineQRImage = QRGenerator.image(from: QRGenerator.qrContent(for: vehicle))
             }
         }
         .sheet(isPresented: $showingShareQR) {

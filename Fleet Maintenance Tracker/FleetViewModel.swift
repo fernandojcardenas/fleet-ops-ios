@@ -32,6 +32,7 @@ class FleetViewModel {
     var vehicles: [Vehicle] = []
     var logsByVehicleID: [String: [MaintenanceLog]] = [:]
     var serviceTemplates: [ServiceTemplate] = []
+    var trips: [Trip] = []
     var errorMessage: String?
 
     @ObservationIgnored
@@ -50,6 +51,9 @@ class FleetViewModel {
     private var templatesListener: ListenerRegistration?
 
     @ObservationIgnored
+    private var tripsListener: ListenerRegistration?
+
+    @ObservationIgnored
     private var previousVehicles: [String: Vehicle] = [:]
 
     @ObservationIgnored
@@ -65,12 +69,14 @@ class FleetViewModel {
         vehiclesListener?.remove()
         logsListener?.remove()
         templatesListener?.remove()
+        tripsListener?.remove()
     }
 
     func startListening() {
         startListeningVehicles()
         startListeningAllLogs()
         startListeningTemplates()
+        startListeningTrips()
     }
 
     func stopListening() {
@@ -80,6 +86,25 @@ class FleetViewModel {
         logsListener = nil
         templatesListener?.remove()
         templatesListener = nil
+        tripsListener?.remove()
+        tripsListener = nil
+    }
+
+    private func startListeningTrips() {
+        tripsListener?.remove()
+        tripsListener = db.collection("trips")
+            .addSnapshotListener { [weak self] snapshot, error in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if let error {
+                        self.errorMessage = error.localizedDescription
+                        return
+                    }
+                    self.trips = snapshot?.documents.compactMap {
+                        try? $0.data(as: Trip.self)
+                    } ?? []
+                }
+            }
     }
 
     private func startListeningTemplates() {
@@ -279,6 +304,176 @@ class FleetViewModel {
         do {
             try await db.collection("vehicles").document(vehicleID)
                 .updateData(["status": newStatus])
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func updateOperationalStatus(vehicleID: String,
+                                 newStatus: OperationalStatus) async -> Bool {
+        errorMessage = nil
+        guard !vehicleID.isEmpty else {
+            errorMessage = "Vehicle is missing an id."
+            return false
+        }
+        do {
+            try await db.collection("vehicles").document(vehicleID)
+                .updateData(["operationalStatus": newStatus.rawValue])
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func activeTrip(for vehicleID: String) -> Trip? {
+        trips.first { $0.vehicleID == vehicleID && $0.effectiveIsOngoing }
+    }
+
+    @discardableResult
+    func startTrip(vehicleID: String,
+                   dateStart: Date,
+                   mileageStart: Int,
+                   notes: String? = nil) async -> Bool {
+        errorMessage = nil
+        guard !vehicleID.isEmpty else {
+            errorMessage = "Vehicle is missing an id."
+            return false
+        }
+        let docRef = db.collection("trips").document()
+        let trip = Trip(
+            id: docRef.documentID,
+            vehicleID: vehicleID,
+            dateStart: dateStart,
+            dateEnd: nil,
+            mileageStart: mileageStart,
+            mileageEnd: nil,
+            status: Trip.statusActive,
+            notes: notes,
+            isOngoing: true
+        )
+        do {
+            try docRef.setData(from: trip)
+            _ = await updateOperationalStatus(vehicleID: vehicleID, newStatus: .onTrip)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func endTrip(_ trip: Trip,
+                 dateEnd: Date,
+                 mileageEnd: Int) async -> Bool {
+        errorMessage = nil
+        guard !trip.id.isEmpty else {
+            errorMessage = "Trip is missing an id."
+            return false
+        }
+        do {
+            try await db.collection("trips").document(trip.id).updateData([
+                "dateEnd": Timestamp(date: dateEnd),
+                "mileageEnd": mileageEnd,
+                "status": Trip.statusCompleted,
+                "isOngoing": false
+            ])
+            _ = await updateOperationalStatus(vehicleID: trip.vehicleID, newStatus: .available)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    // Fallback used by Trip End when no Active trip is found for the vehicle:
+    // records a complete trip from the single end-form submission.
+    @discardableResult
+    func addCompletedTrip(vehicleID: String,
+                          dateStart: Date,
+                          dateEnd: Date,
+                          mileageStart: Int,
+                          mileageEnd: Int,
+                          notes: String? = nil) async -> Bool {
+        errorMessage = nil
+        guard !vehicleID.isEmpty else {
+            errorMessage = "Vehicle is missing an id."
+            return false
+        }
+        let docRef = db.collection("trips").document()
+        let trip = Trip(
+            id: docRef.documentID,
+            vehicleID: vehicleID,
+            dateStart: dateStart,
+            dateEnd: dateEnd,
+            mileageStart: mileageStart,
+            mileageEnd: mileageEnd,
+            status: Trip.statusCompleted,
+            notes: notes,
+            isOngoing: false
+        )
+        do {
+            try docRef.setData(from: trip)
+            _ = await updateOperationalStatus(vehicleID: vehicleID, newStatus: .available)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func updateTrip(_ trip: Trip) async -> Bool {
+        errorMessage = nil
+        guard !trip.id.isEmpty else {
+            errorMessage = "Trip is missing an id."
+            return false
+        }
+        var toSave = trip
+        // Keep status and isOngoing in lockstep.
+        if toSave.effectiveIsOngoing {
+            toSave.status = Trip.statusActive
+            toSave.isOngoing = true
+            toSave.dateEnd = nil
+            toSave.mileageEnd = nil
+        } else {
+            toSave.status = Trip.statusCompleted
+            toSave.isOngoing = false
+        }
+        do {
+            try db.collection("trips").document(toSave.id).setData(from: toSave, merge: true)
+            let newOpStatus: OperationalStatus = toSave.effectiveIsOngoing ? .onTrip : .available
+            _ = await updateOperationalStatus(vehicleID: toSave.vehicleID, newStatus: newOpStatus)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func deleteTrip(_ trip: Trip) async -> Bool {
+        errorMessage = nil
+        guard !trip.id.isEmpty else {
+            errorMessage = "Trip is missing an id."
+            return false
+        }
+        do {
+            try await db.collection("trips").document(trip.id).delete()
+            // If we just removed the vehicle's only ongoing trip, swing the
+            // operational badge back to Available.
+            if trip.effectiveIsOngoing {
+                let stillOngoing = trips.contains {
+                    $0.id != trip.id && $0.vehicleID == trip.vehicleID && $0.effectiveIsOngoing
+                }
+                if !stillOngoing {
+                    _ = await updateOperationalStatus(vehicleID: trip.vehicleID,
+                                                      newStatus: .available)
+                }
+            }
             return true
         } catch {
             errorMessage = error.localizedDescription
