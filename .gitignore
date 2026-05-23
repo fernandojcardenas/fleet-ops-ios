@@ -49,3 +49,6 @@ fastlane/test_output
 *.log
 *.swp
 *~
+
+# Local workspace symlinks (Xcode Info.plist alias at repo root)
+/Fleet-Maintenance-Tracker-Info.plist
