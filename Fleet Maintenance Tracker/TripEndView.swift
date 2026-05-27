@@ -19,6 +19,7 @@ struct TripEndView: View {
     @State private var mileageStart: Int? = nil
     @State private var isSaving = false
     @State private var didPrefill = false
+    @State private var showMileageAlert = false
 
     private var vehicle: Vehicle? {
         fleetViewModel.vehicles.first { $0.id == vehicleID }
@@ -114,6 +115,11 @@ struct TripEndView: View {
                     }
                 }
                 .onAppear { prefillIfNeeded() }
+                .alert("Invalid Mileage", isPresented: $showMileageAlert) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text("Ending mileage cannot be lower than starting mileage.")
+                }
             } else {
                 ContentUnavailableView(
                     "Vehicle Not Found",
@@ -132,12 +138,7 @@ struct TripEndView: View {
     private var canSave: Bool {
         guard let mileageEnd, mileageEnd >= 0 else { return false }
         if activeTrip == nil {
-            guard let mileageStart, mileageStart >= 0, mileageEnd >= mileageStart else {
-                return false
-            }
-        } else if let activeStart = activeTrip?.mileageStart,
-                  mileageEnd < activeStart {
-            return false
+            guard let mileageStart, mileageStart >= 0 else { return false }
         }
         return true
     }
@@ -165,6 +166,11 @@ struct TripEndView: View {
 
     private func save() {
         guard let mileageEnd else { return }
+        let comparisonStart: Int? = activeTrip?.mileageStart ?? mileageStart
+        if let comparisonStart, mileageEnd < comparisonStart {
+            showMileageAlert = true
+            return
+        }
         isSaving = true
         Task {
             let success: Bool

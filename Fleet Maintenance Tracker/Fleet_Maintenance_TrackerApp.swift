@@ -7,16 +7,24 @@
 
 import SwiftUI
 import FirebaseCore
+import FirebaseFirestore
 import UserNotifications
 #if canImport(UIKit)
 import UIKit
 #endif
+
+private func configureFirestoreOfflinePersistence() {
+    let settings = Firestore.firestore().settings
+    settings.cacheSettings = PersistentCacheSettings()
+    Firestore.firestore().settings = settings
+}
 
 #if canImport(UIKit)
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         FirebaseApp.configure()
+        configureFirestoreOfflinePersistence()
         UNUserNotificationCenter.current().delegate = self
         Task { @MainActor in
             await NotificationManager.shared.requestAuthorization()
@@ -39,6 +47,7 @@ struct Fleet_Maintenance_TrackerApp: App {
     #else
     init() {
         FirebaseApp.configure()
+        configureFirestoreOfflinePersistence()
     }
     #endif
 

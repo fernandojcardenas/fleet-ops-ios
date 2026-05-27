@@ -103,6 +103,7 @@ class FleetViewModel {
                     self.trips = snapshot?.documents.compactMap {
                         try? $0.data(as: Trip.self)
                     } ?? []
+                    self.evaluateMaintenanceAlerts()
                 }
             }
     }
@@ -120,6 +121,7 @@ class FleetViewModel {
                     self.serviceTemplates = snapshot?.documents.compactMap {
                         try? $0.data(as: ServiceTemplate.self)
                     } ?? []
+                    self.evaluateMaintenanceAlerts()
                 }
             }
     }
@@ -183,6 +185,20 @@ class FleetViewModel {
         }
     }
 
+    func setAssignedVehicleIDs(templateID: String,
+                               vehicleIDs: [String]) async -> Bool {
+        errorMessage = nil
+        guard !templateID.isEmpty else { return false }
+        let docRef = db.collection("serviceTemplates").document(templateID)
+        do {
+            try await docRef.updateData(["assignedVehicleIDs": vehicleIDs])
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     private func startListeningVehicles() {
         vehiclesListener?.remove()
         vehiclesListener = db.collection("vehicles").addSnapshotListener { [weak self] snapshot, error in
@@ -199,6 +215,7 @@ class FleetViewModel {
                 self.vehicles = newVehicles
                 self.hasReceivedInitialVehicleSnapshot = true
                 self.detectServiceDueChanges()
+                self.evaluateMaintenanceAlerts()
             }
         }
     }
@@ -220,8 +237,14 @@ class FleetViewModel {
                     self.logsByVehicleID = Dictionary(grouping: allLogs, by: { $0.vehicleID })
                     self.hasReceivedInitialLogsSnapshot = true
                     self.detectServiceDueChanges()
+                    self.evaluateMaintenanceAlerts()
                 }
             }
+    }
+
+    private func evaluateMaintenanceAlerts() {
+        guard hasReceivedInitialVehicleSnapshot && hasReceivedInitialLogsSnapshot else { return }
+        NotificationManager.shared.evaluateMaintenanceAlerts(in: self)
     }
 
     private func detectStatusChanges(newVehicles: [Vehicle]) {
@@ -489,10 +512,15 @@ class FleetViewModel {
         }
         // qrCode is locked at creation. Preserve the existing value to prevent rotation.
         var toSave = vehicle
-        if let existing = vehicles.first(where: { $0.id == vehicle.id })?.qrCode {
-            toSave.qrCode = existing
+        let existing = vehicles.first(where: { $0.id == vehicle.id })
+        if let existingQR = existing?.qrCode {
+            toSave.qrCode = existingQR
         } else if toSave.qrCode == nil {
             toSave.qrCode = UUID().uuidString
+        }
+        // Preserve any per-vehicle interval overrides that the caller didn't pass through.
+        if toSave.customServiceIntervals == nil {
+            toSave.customServiceIntervals = existing?.customServiceIntervals
         }
         do {
             try db.collection("vehicles").document(vehicle.id).setData(from: toSave, merge: true)
@@ -564,7 +592,40 @@ class FleetViewModel {
             mileage: mileage,
             cost: cost,
             notes: notes,
-            receiptURL: receiptURL
+            receiptURL: receiptURL,
+            isSkipped: false
+        )
+        do {
+            try docRef.setData(from: log)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func skipService(vehicleID: String, template: ServiceTemplate) async -> Bool {
+        errorMessage = nil
+        guard !vehicleID.isEmpty else {
+            errorMessage = "Vehicle is missing an id."
+            return false
+        }
+        guard let currentMileage = latestMileage(for: vehicleID) else {
+            errorMessage = "Add a maintenance log with the current odometer before skipping a service."
+            return false
+        }
+        let docRef = db.collection("logs").document()
+        let log = MaintenanceLog(
+            id: docRef.documentID,
+            vehicleID: vehicleID,
+            serviceType: template.serviceName,
+            date: Date(),
+            mileage: currentMileage,
+            cost: 0.0,
+            notes: "Service Skipped",
+            receiptURL: nil,
+            isSkipped: true
         )
         do {
             try docRef.setData(from: log)
@@ -653,13 +714,14 @@ class FleetViewModel {
         guard !templates.isEmpty else { return .noSchedule }
         var lowest: Int? = nil
         for template in templates {
+            let interval = vehicle.effectiveInterval(for: template)
             let h = serviceHealth(for: vehicle.id, template: template)
             let percent: Int
             switch h {
             case .green(let m), .yellow(let m), .red(let m):
-                percent = Int((Double(m) / Double(max(template.mileageInterval, 1))) * 100)
+                percent = Int((Double(m) / Double(max(interval, 1))) * 100)
             case .overdue(let m):
-                percent = -Int((Double(m) / Double(max(template.mileageInterval, 1))) * 100)
+                percent = -Int((Double(m) / Double(max(interval, 1))) * 100)
             case .neverServiced:
                 percent = 0
             case .unknown:
@@ -682,11 +744,35 @@ class FleetViewModel {
         guard let lastServiceMileage = matching.first?.mileage else {
             return .neverServiced
         }
-        let remaining = (lastServiceMileage + template.mileageInterval) - currentMileage
+        let interval = vehicles.first(where: { $0.id == vehicleID })?
+            .effectiveInterval(for: template) ?? template.mileageInterval
+        let remaining = (lastServiceMileage + interval) - currentMileage
         if remaining < 0 { return .overdue(milesOver: -remaining) }
         if remaining < 200 { return .red(milesRemaining: remaining) }
         if remaining <= 1000 { return .yellow(milesRemaining: remaining) }
         return .green(milesRemaining: remaining)
+    }
+
+    @discardableResult
+    func setCustomServiceInterval(vehicleID: String,
+                                  templateID: String,
+                                  miles: Int?) async -> Bool {
+        errorMessage = nil
+        guard !vehicleID.isEmpty, !templateID.isEmpty else { return false }
+        var dict = vehicles.first(where: { $0.id == vehicleID })?.customServiceIntervals ?? [:]
+        if let miles, miles > 0 {
+            dict[templateID] = miles
+        } else {
+            dict.removeValue(forKey: templateID)
+        }
+        do {
+            try await db.collection("vehicles").document(vehicleID)
+                .updateData(["customServiceIntervals": dict])
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     func serviceStatus(for vehicle: Vehicle) -> ServiceStatus {

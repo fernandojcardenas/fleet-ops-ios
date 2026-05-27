@@ -16,4 +16,7 @@ struct MaintenanceLog: Codable, Identifiable, Hashable {
     var cost: Double
     var notes: String
     var receiptURL: String?
+    var isSkipped: Bool? = false
+
+    var effectiveIsSkipped: Bool { isSkipped ?? false }
 }

@@ -30,6 +30,9 @@ struct ServiceTemplateDetailView: View {
                             Text("No vehicles to assign yet.")
                                 .foregroundStyle(.secondary)
                         } else {
+                            Button(allSelected(in: template) ? "Deselect All" : "Select All") {
+                                toggleAll(for: template)
+                            }
                             ForEach(fleetViewModel.vehicles) { vehicle in
                                 Toggle(isOn: binding(for: template, vehicleID: vehicle.id)) {
                                     VStack(alignment: .leading, spacing: 2) {
@@ -68,5 +71,22 @@ struct ServiceTemplateDetailView: View {
                 }
             }
         )
+    }
+
+    private func allSelected(in template: ServiceTemplate) -> Bool {
+        let allIDs = Set(fleetViewModel.vehicles.map(\.id))
+        guard !allIDs.isEmpty else { return false }
+        return allIDs.isSubset(of: Set(template.assignedVehicleIDs))
+    }
+
+    private func toggleAll(for template: ServiceTemplate) {
+        let shouldDeselect = allSelected(in: template)
+        let newIDs = shouldDeselect ? [] : fleetViewModel.vehicles.map(\.id)
+        Task {
+            _ = await fleetViewModel.setAssignedVehicleIDs(
+                templateID: template.id,
+                vehicleIDs: newIDs
+            )
+        }
     }
 }

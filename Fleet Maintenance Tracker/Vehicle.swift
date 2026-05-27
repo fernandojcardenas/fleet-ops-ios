@@ -66,6 +66,9 @@ struct Vehicle: Codable, Identifiable, Hashable {
     // Persistent QR identifier assigned at creation. Never regenerated.
     var qrCode: String?
     var operationalStatus: OperationalStatus? = nil
+    // Per-vehicle overrides for ServiceTemplate mileage intervals.
+    // Keys are ServiceTemplate.id; values are mileage intervals in miles.
+    var customServiceIntervals: [String: Int]? = nil
 
     var effectiveStatus: VehicleStatus { status ?? .active }
 
@@ -73,4 +76,8 @@ struct Vehicle: Codable, Identifiable, Hashable {
 
     // Falls back to id for vehicles created before qrCode existed.
     var effectiveQRCode: String { qrCode ?? id }
+
+    func effectiveInterval(for template: ServiceTemplate) -> Int {
+        customServiceIntervals?[template.id] ?? template.mileageInterval
+    }
 }

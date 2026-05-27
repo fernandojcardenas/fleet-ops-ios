@@ -25,6 +25,9 @@ struct VehicleDetailView: View {
     @State private var showingShareSheet = false
     @State private var showingQR = false
     @State private var isExporting = false
+    @State private var intervalEditTarget: ServiceTemplate? = nil
+    @State private var skipConfirmTarget: ServiceTemplate? = nil
+    @State private var isSkipping = false
     #if canImport(UIKit)
     @State private var inlineQRImage: UIImage? = nil
     @State private var showingShareQR = false
@@ -199,6 +202,35 @@ struct VehicleDetailView: View {
                 .sheet(item: $editingLog) { log in
                     EditLogView(log: log, fleetViewModel: fleetViewModel)
                 }
+                .sheet(item: $intervalEditTarget) { template in
+                    EditServiceIntervalView(
+                        vehicle: vehicle,
+                        template: template,
+                        fleetViewModel: fleetViewModel
+                    )
+                }
+                .alert("Skip Service?",
+                       isPresented: Binding(
+                            get: { skipConfirmTarget != nil },
+                            set: { if !$0 { skipConfirmTarget = nil } }
+                       ),
+                       presenting: skipConfirmTarget) { template in
+                    Button("Cancel", role: .cancel) { skipConfirmTarget = nil }
+                    Button("Skip") {
+                        let target = template
+                        skipConfirmTarget = nil
+                        Task {
+                            isSkipping = true
+                            _ = await fleetViewModel.skipService(
+                                vehicleID: vehicleID,
+                                template: target
+                            )
+                            isSkipping = false
+                        }
+                    }
+                } message: { template in
+                    Text("Mark \(template.serviceName) as skipped at the current odometer? A no-cost log entry will be saved and the interval will reset.")
+                }
                 .alert("Delete Log?",
                        isPresented: Binding(
                             get: { logPendingDeletion != nil },
@@ -306,21 +338,71 @@ struct VehicleDetailView: View {
     @ViewBuilder
     private func serviceHealthRow(for template: ServiceTemplate) -> some View {
         let health = fleetViewModel.serviceHealth(for: vehicleID, template: template)
+        let customInterval = vehicle?.customServiceIntervals?[template.id]
+        let effectiveInterval = customInterval ?? template.mileageInterval
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(template.serviceName)
                     .font(.body)
-                Text("Every \(template.mileageInterval) mi")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("Every \(effectiveInterval) mi")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if customInterval != nil {
+                        Text("Custom")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.18), in: Capsule())
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
             }
             Spacer()
+            Button {
+                skipConfirmTarget = template
+            } label: {
+                Label("Skip", systemImage: "forward.end.fill")
+                    .labelStyle(.titleAndIcon)
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .tint(.orange)
+            .disabled(isSkipping)
             Text(health.label)
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(health.color, in: Capsule())
                 .foregroundStyle(.white)
+        }
+        .contentShape(Rectangle())
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                intervalEditTarget = template
+            } label: {
+                Label("Edit Interval", systemImage: "slider.horizontal.3")
+            }
+            .tint(.blue)
+            Button {
+                skipConfirmTarget = template
+            } label: {
+                Label("Skip", systemImage: "forward.end.fill")
+            }
+            .tint(.orange)
+        }
+        .contextMenu {
+            Button {
+                intervalEditTarget = template
+            } label: {
+                Label("Edit Interval", systemImage: "slider.horizontal.3")
+            }
+            Button {
+                skipConfirmTarget = template
+            } label: {
+                Label("Skip Service", systemImage: "forward.end.fill")
+            }
         }
     }
 
@@ -398,10 +480,20 @@ struct VehicleDetailView: View {
 
     @ViewBuilder
     private func logRow(_ log: MaintenanceLog) -> some View {
+        let skipped = log.effectiveIsSkipped
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(log.serviceType)
                     .font(.headline)
+                    .strikethrough(skipped)
+                if skipped {
+                    Text("Skipped")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.2), in: Capsule())
+                        .foregroundStyle(.secondary)
+                }
                 if log.receiptURL != nil {
                     Image(systemName: "camera.fill")
                         .foregroundStyle(.secondary)
@@ -426,5 +518,108 @@ struct VehicleDetailView: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .foregroundStyle(skipped ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+        .opacity(skipped ? 0.7 : 1.0)
+    }
+}
+
+private struct EditServiceIntervalView: View {
+    let vehicle: Vehicle
+    let template: ServiceTemplate
+    let fleetViewModel: FleetViewModel
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var milesText: String = ""
+    @State private var isSaving = false
+
+    private var existingOverride: Int? {
+        vehicle.customServiceIntervals?[template.id]
+    }
+
+    private var parsedMiles: Int? {
+        let trimmed = milesText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, let value = Int(trimmed), value > 0 else { return nil }
+        return value
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Service") {
+                    LabeledContent("Name", value: template.serviceName)
+                    LabeledContent("Global Interval", value: "\(template.mileageInterval) mi")
+                }
+                Section("Custom Interval for \(vehicle.make) \(vehicle.model)") {
+                    TextField("Miles", text: $milesText)
+                        #if canImport(UIKit)
+                        .keyboardType(.numberPad)
+                        #endif
+                    Text("Leave blank or tap Reset to use the global interval.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if existingOverride != nil {
+                    Section {
+                        Button(role: .destructive) {
+                            reset()
+                        } label: {
+                            Text("Reset to Global Interval")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .disabled(isSaving)
+                    }
+                }
+                if let errorMessage = fleetViewModel.errorMessage {
+                    Section {
+                        Text(errorMessage).foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Edit Interval")
+            #if canImport(UIKit)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(parsedMiles == nil || isSaving)
+                }
+            }
+            .onAppear {
+                if let existingOverride {
+                    milesText = String(existingOverride)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        guard let miles = parsedMiles else { return }
+        isSaving = true
+        Task {
+            let success = await fleetViewModel.setCustomServiceInterval(
+                vehicleID: vehicle.id,
+                templateID: template.id,
+                miles: miles
+            )
+            isSaving = false
+            if success { dismiss() }
+        }
+    }
+
+    private func reset() {
+        isSaving = true
+        Task {
+            let success = await fleetViewModel.setCustomServiceInterval(
+                vehicleID: vehicle.id,
+                templateID: template.id,
+                miles: nil
+            )
+            isSaving = false
+            if success { dismiss() }
+        }
     }
 }
