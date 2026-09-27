@@ -9,7 +9,6 @@ Found while documenting the app on 2026-09-27. Listed honestly so the state of t
 | 1 | **No unit tests.** The health and status math lives inside `FleetViewModel` next to Firestore calls | It's the logic that decides when a car gets serviced. Extract it into a pure type and cover it with XCTest (ADR 0001 follow-up) |
 | 2 | **Info.plist path depends on a local symlink.** `INFOPLIST_FILE` points at the repo root, where a gitignored symlink to the real file lives | A fresh clone doesn't build until the symlink exists. CI creates it. Fix: point the build setting at `Fleet Maintenance Tracker/Fleet-Maintenance-Tracker-Info.plist` and exclude it from the synced group's resources |
 | 3 | **`AnalyticsTabView.swift` sits at the repo root**, outside the app folder, referenced explicitly in the project | Inconsistent layout. Move it into the app folder in Xcode (which updates the project file) |
-| 4 | **Screenshots** | To be captured from the emulator with seed data |
 
 ## Behavior
 

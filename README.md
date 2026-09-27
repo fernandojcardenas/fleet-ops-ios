@@ -30,7 +30,13 @@ Everything below is in the code in this repository.
 
 ## Screenshots
 
-*Screenshots will be captured from the app running against the local Firebase emulator with the fictional seed data in `firebase/seed/`. No production data will appear in this repository.*
+The App Store screenshots for version 0.1.4, captured from the shipped app:
+
+| Fleet dashboard | Service schedules | Trips | Analytics |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/screenshots/01-fleet-dashboard.png" width="200" alt="Fleet dashboard with spend, vehicles in shop, active trips and the vehicle list"> | <img src="docs/screenshots/02-maintenance.png" width="200" alt="Maintenance tab with a Tire Rotation template every 5,000 miles"> | <img src="docs/screenshots/03-trips.png" width="200" alt="Trips tab with one ongoing and one completed trip"> | <img src="docs/screenshots/04-analytics.png" width="200" alt="Analytics tab with spend and date, vehicle and owner filters"> |
+
+To reproduce these screens locally with fictional data, run the app in emulator mode ([firebase/README.md](firebase/README.md)).
 
 ## Architecture
 
