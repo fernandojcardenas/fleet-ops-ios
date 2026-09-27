@@ -1,0 +1,13 @@
+Copyright (c) 2026 FAJ Management LLC. All rights reserved.
+
+This repository is published so that its source code can be read and
+evaluated, for example by prospective employers and reviewers. No license
+is granted to copy, modify, distribute, sublicense, or use this software or
+any part of it, in source or binary form, for any purpose, without prior
+written permission from FAJ Management LLC.
+
+"Rental Fleet Management" as distributed on the Apple App Store is a
+product of FAJ Management LLC.
+
+Third-party components (for example the Firebase iOS SDK and the npm
+packages in firebase/) remain under their own licenses.
