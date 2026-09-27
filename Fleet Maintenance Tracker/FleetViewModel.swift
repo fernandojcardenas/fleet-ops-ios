@@ -39,7 +39,9 @@ class FleetViewModel {
     private let db = Firestore.firestore()
 
     @ObservationIgnored
-    private let storage = Storage.storage(url: "gs://fleet-maintenance-9ad07.firebasestorage.app")
+    // Default bucket from GoogleService-Info.plist (same bucket in production),
+    // so the emulator redirect in configureFirebaseBackends() applies.
+    private let storage = Storage.storage()
 
     @ObservationIgnored
     private var vehiclesListener: ListenerRegistration?
