@@ -31,7 +31,7 @@ DerivedData/
 .swiftpm/
 Packages/
 Package.pins
-Package.resolved
+# Package.resolved is committed so CI builds use the exact SDK versions that shipped.
 
 # CocoaPods (not currently used)
 Pods/
@@ -52,3 +52,14 @@ fastlane/test_output
 
 # Local workspace symlinks (Xcode Info.plist alias at repo root)
 /Fleet-Maintenance-Tracker-Info.plist
+
+# Firebase app config: per-environment, never committed.
+# Production copy lives only on the release Mac; see docs/setup.md.
+GoogleService-Info.plist
+
+# Firebase tooling (firebase/)
+firebase/node_modules/
+firebase-debug.log
+firestore-debug.log
+storage-debug.log
+ui-debug.log
