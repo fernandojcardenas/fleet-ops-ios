@@ -36,16 +36,16 @@ Everything below is in the code in this repository.
 
 ```mermaid
 flowchart LR
-  subgraph iOS app
-    V[SwiftUI views] -->|reads state, calls intents| VM[FleetViewModel<br/>@Observable, @MainActor]
-    A[AuthManager] --> V
-    VM --> N[NotificationManager<br/>local notifications]
+  subgraph app["iOS app"]
+    V["SwiftUI views"] -->|"reads state, calls intents"| VM["FleetViewModel<br/>(Observable, MainActor)"]
+    A["AuthManager"] --> V
+    VM --> N["NotificationManager<br/>local notifications"]
   end
-  VM <-->|snapshot listeners + writes| FS[(Cloud Firestore<br/>vehicles · logs · trips · serviceTemplates)]
-  VM -->|receipt JPEGs| ST[(Cloud Storage<br/>receipts/)]
-  A <--> AU[Firebase Auth<br/>email/password, sign-up disabled]
-  R{{Security rules<br/>staff allowlist}} -.guards.- FS
-  R -.guards.- ST
+  VM <-->|"snapshot listeners + writes"| FS[("Cloud Firestore<br/>vehicles · logs · trips · serviceTemplates")]
+  VM -->|"receipt JPEGs"| ST[("Cloud Storage<br/>receipts/")]
+  A <--> AU["Firebase Auth<br/>email/password, sign-up disabled"]
+  R{{"Security rules<br/>staff allowlist"}} -. guards .- FS
+  R -. guards .- ST
 ```
 
 One `@Observable` view model owns all fleet state and keeps it live with four Firestore snapshot listeners. Views never touch Firebase directly. Details: [docs/architecture.md](docs/architecture.md). Decisions: [docs/adr/](docs/adr/).

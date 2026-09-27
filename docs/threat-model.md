@@ -16,14 +16,14 @@ Scope: the iOS app, Firebase Auth, Cloud Firestore and Cloud Storage as configur
 
 ```mermaid
 flowchart LR
-  U[Staff member] -->|device unlock| P[iPhone / iPad<br/>app + offline cache]
-  P -- TLS --> AU[Firebase Auth]
-  P -- TLS, ID token --> FS[(Firestore)]
-  P -- TLS, ID token --> ST[(Storage)]
-  O[Owner in Firebase console] -->|Google account| FS
+  U["Staff member"] -->|"device unlock"| P["iPhone / iPad<br/>app + offline cache"]
+  P -->|"TLS"| AU["Firebase Auth"]
+  P -->|"TLS + ID token"| FS[("Firestore")]
+  P -->|"TLS + ID token"| ST[("Storage")]
+  O["Owner in Firebase console"] -->|"Google account"| FS
   O --> ST
   O --> AU
-  R{{Security rules}} -.enforced server-side.- FS
+  R{{"Security rules"}} -. "enforced server-side" .- FS
   R -.- ST
 ```
 
