@@ -1,0 +1,95 @@
+ RUN  v5.0.2 firebase
+
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > reads every fleet collection 1064ms
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > adds a vehicle stamped with their own uid 259ms
+stderr | tests/firestore.test.mjs > staff member (listed in /staff) > cannot add a vehicle attributed to someone else
+[2026-09-27T14:57:24.409Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb1e2 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L56, false for 'create' @ L116, evaluation error at L61:24 for 'update' @ L61, false for 'update' @ L116, false for 'create' @ L56, false for 'create' @ L116
+
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > cannot add a vehicle attributed to someone else 110ms
+stderr | tests/firestore.test.mjs > staff member (listed in /staff) > cannot rewrite addedBy on an existing vehicle
+[2026-09-27T14:57:24.529Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb1e4 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L61:24 for 'update' @ L61, false for 'update' @ L116, false for 'update' @ L61, false for 'update' @ L116
+
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > cannot rewrite addedBy on an existing vehicle 117ms
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > updates status and operational status (app updateData calls) 222ms
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > logs service, including a skipped service at zero cost 122ms
+stderr | tests/firestore.test.mjs > staff member (listed in /staff) > cannot log service for a vehicle that does not exist
+[2026-09-27T14:57:24.990Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb1ed error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L79:24 for 'create' @ L79, false for 'create' @ L116, evaluation error at L80:24 for 'update' @ L80, false for 'update' @ L116, false for 'create' @ L79, false for 'create' @ L116
+
+stderr | tests/firestore.test.mjs > staff member (listed in /staff) > cannot write malformed logs
+[2026-09-27T14:57:25.085Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb1ef error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L79, false for 'create' @ L116, false for 'update' @ L80, false for 'update' @ L116
+
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > cannot log service for a vehicle that does not exist 116ms
+stderr | tests/firestore.test.mjs > staff member (listed in /staff) > cannot write malformed logs
+[2026-09-27T14:57:25.146Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb1f0 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L79, false for 'create' @ L116, false for 'update' @ L80, false for 'update' @ L116
+
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > cannot write malformed logs 157ms
+stderr | tests/firestore.test.mjs > staff member (listed in /staff) > cannot set an unknown trip status
+[2026-09-27T14:57:25.325Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb1f5 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L91, false for 'create' @ L116, false for 'update' @ L92, false for 'update' @ L116
+
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > starts and ends a trip the way the app does 107ms
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > cannot set an unknown trip status 71ms
+stderr | tests/firestore.test.mjs > staff member (listed in /staff) > manages service templates and assignments
+[2026-09-27T14:57:25.485Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb1f9 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L105, false for 'create' @ L116, false for 'update' @ L105, false for 'update' @ L116
+
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > manages service templates and assignments 161ms
+stderr | tests/firestore.test.mjs > staff member (listed in /staff) > cannot grant staff access to anyone, including themselves
+[2026-09-27T14:57:25.711Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb1fe error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L40, false for 'create' @ L116, false for 'update' @ L40, false for 'update' @ L116
+
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > deletes a vehicle and its logs 139ms
+stderr | tests/firestore.test.mjs > staff member (listed in /staff) > cannot grant staff access to anyone, including themselves
+[2026-09-27T14:57:25.736Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb1ff error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L40, false for 'delete' @ L116
+
+ ✓ tests/firestore.test.mjs > staff member (listed in /staff) > cannot grant staff access to anyone, including themselves 112ms
+ ✓ tests/firestore.test.mjs > signed-in account that is NOT staff > cannot read vehicles, lockbox codes included 149ms
+ ✓ tests/firestore.test.mjs > signed-in account that is NOT staff > cannot read logs, trips or templates 135ms
+stderr | tests/firestore.test.mjs > signed-in account that is NOT staff > cannot modify or delete fleet data
+[2026-09-27T14:57:26.141Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb208 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L61:24 for 'update' @ L61, false for 'update' @ L116, false for 'update' @ L61, false for 'update' @ L116
+
+stderr | tests/firestore.test.mjs > signed-in account that is NOT staff > cannot modify or delete fleet data
+[2026-09-27T14:57:26.192Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb209 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L54:30 for 'delete' @ L54, false for 'delete' @ L116, false for 'delete' @ L54, false for 'delete' @ L116
+
+stderr | tests/firestore.test.mjs > signed-in account that is NOT staff > cannot modify or delete fleet data
+[2026-09-27T14:57:26.238Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb20a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L56:24 for 'create' @ L56, false for 'create' @ L116, evaluation error at L61:24 for 'update' @ L61, false for 'update' @ L116, false for 'create' @ L56, false for 'create' @ L116
+
+ ✓ tests/firestore.test.mjs > signed-in account that is NOT staff > cannot modify or delete fleet data 218ms
+stderr | tests/firestore.test.mjs > signed-in account that is NOT staff > cannot add themselves to the staff allowlist
+[2026-09-27T14:57:26.338Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb20c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L40, false for 'create' @ L116, false for 'update' @ L40, false for 'update' @ L116
+
+ ✓ tests/firestore.test.mjs > signed-in account that is NOT staff > cannot add themselves to the staff allowlist 99ms
+ ✓ tests/firestore.test.mjs > signed-in account that is NOT staff > can still manage their own /users record (account deletion) 147ms
+stderr | tests/firestore.test.mjs > unauthenticated client > is denied everything
+[2026-09-27T14:57:26.614Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb214 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L56, false for 'create' @ L116, false for 'update' @ L61, false for 'update' @ L116
+
+stderr | tests/firestore.test.mjs > unknown collections > are denied even to staff
+[2026-09-27T14:57:26.691Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x3affb216 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L116, false for 'update' @ L116
+
+ ✓ tests/firestore.test.mjs > unauthenticated client > is denied everything 129ms
+ ✓ tests/firestore.test.mjs > unknown collections > are denied even to staff 78ms
+ ✓ tests/storage.test.mjs > receipts > staff can upload a JPEG receipt, as the app does 539ms
+ ✓ tests/storage.test.mjs > receipts > staff can read and delete receipts 113ms
+ ✓ tests/storage.test.mjs > receipts > staff cannot upload non-images 79ms
+ ✓ tests/storage.test.mjs > receipts > staff cannot write outside receipts/ 66ms
+ ✓ tests/storage.test.mjs > receipts > a signed-in non-staff account cannot read, upload or delete 129ms
+ ✓ tests/storage.test.mjs > receipts > an unauthenticated client cannot read 81ms
+ ✓ tests/legacy.test.mjs > legacy live rules (before hardening) > a non-staff account can read the lockbox code 210ms
+ ✓ tests/legacy.test.mjs > legacy live rules (before hardening) > a non-staff account can change the lockbox code 97ms
+
+ Test Files  3 passed (3)
+      Tests  28 passed (28)
+   Start at  10:57:21
+   Duration  8.01s (tests 91%, import 8%, transform 1%)

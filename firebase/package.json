@@ -1,0 +1,19 @@
+{
+  "name": "fleet-ops-firebase",
+  "private": true,
+  "description": "Security rules, rules tests and demo seed data for Fleet Ops",
+  "type": "module",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore,storage --project demo-fleet-ops \"vitest run\"",
+    "emulators": "firebase emulators:start --only auth,firestore,storage --project demo-fleet-ops",
+    "seed": "node seed/seed.mjs",
+    "seed:check": "firebase emulators:exec --only auth,firestore --project demo-fleet-ops \"node seed/seed.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.19.0",
+    "firebase-admin": "14.5.0",
+    "firebase-tools": "15.31.0",
+    "vitest": "5.0.2"
+  }
+}

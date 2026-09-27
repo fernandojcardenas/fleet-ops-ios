@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Storage rules for Fleet Ops receipt photos.
+// Same access model as firestore.rules: only users listed in /staff/{uid}
+// may read or write receipts. Uploads must be images under 15 MB.
+//
+// Note: the app stores Firebase download URLs in Firestore. A download URL
+// carries its own token and is served without evaluating these rules, so
+// those URLs must be treated as secrets. See docs/threat-model.md (I-3).
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isStaff() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/staff/$(request.auth.uid));
+    }
+
+    match /receipts/{filename} {
+      allow read, delete: if isStaff();
+      allow create, update: if isStaff()
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

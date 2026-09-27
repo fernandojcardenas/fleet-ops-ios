@@ -1,73 +1,117 @@
 rules_version = '2';
 
-// Security rules for Fleet Maintenance Tracker.
+// Security rules for Fleet Ops (Rental Fleet Management).
 //
-// Model: any authenticated user may read and write fleet data
-// (single-tenant app). Anonymous users are blocked from everything.
-// Basic field-shape validation is performed on create.
+// Access model: one company, many staff. A signed-in user may touch fleet
+// data only if an allowlist document exists at /staff/{uid}. Clients can
+// never write to /staff; it is managed from the Firebase console or the
+// Admin SDK. Being signed in is not enough on its own.
+//
+// Why: the rules deployed until 2026-09 allowed any signed-in account to
+// read and write every document. Self sign-up was switched off in Firebase
+// Auth, but that left one setting as the only control. These rules add a
+// second, independent one. See docs/security/firestore-rules-hardening.md.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isSignedIn() {
+    function signedIn() {
       return request.auth != null;
     }
 
-    // Vehicles in the fleet.
+    function isStaff() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/staff/$(request.auth.uid));
+    }
+
+    function data() {
+      return request.resource.data;
+    }
+
+    function vehicleExists(vehicleID) {
+      return vehicleID is string
+        && exists(/databases/$(database)/documents/vehicles/$(vehicleID));
+    }
+
+    // ---- Staff allowlist -------------------------------------------------
+    // A user may check their own membership; nobody may write it from a client.
+    match /staff/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // ---- Vehicles ----------------------------------------------------------
+    function validVehicle() {
+      return data().make is string
+        && data().model is string
+        && data().year is int
+        && data().vin is string
+        && data().licensePlate is string
+        && data().addedBy is string;
+    }
+
     match /vehicles/{vehicleId} {
-      allow read: if isSignedIn();
+      allow read, delete: if isStaff();
 
-      allow create: if isSignedIn()
-        && request.resource.data.addedBy == request.auth.uid
-        && request.resource.data.keys().hasAll(
-             ['make', 'model', 'year', 'vin', 'licensePlate', 'addedBy']
-           )
-        && request.resource.data.make is string
-        && request.resource.data.model is string
-        && request.resource.data.year is int
-        && request.resource.data.vin is string
-        && request.resource.data.licensePlate is string;
+      allow create: if isStaff()
+        && validVehicle()
+        && data().addedBy == request.auth.uid;
 
-      allow update, delete: if isSignedIn();
+      // addedBy records who created the vehicle and may not be rewritten.
+      allow update: if isStaff()
+        && validVehicle()
+        && data().addedBy == resource.data.addedBy;
     }
 
-    // Maintenance log entries (one per service event).
+    // ---- Maintenance logs ----------------------------------------------
+    function validLog() {
+      return data().vehicleID is string
+        && data().serviceType is string
+        && data().date is timestamp
+        && data().mileage is int
+        && data().mileage >= 0
+        && data().cost is number
+        && data().cost >= 0;
+    }
+
     match /logs/{logId} {
-      allow read: if isSignedIn();
-
-      allow create: if isSignedIn()
-        && request.resource.data.keys().hasAll(
-             ['vehicleID', 'serviceType', 'date', 'mileage', 'cost']
-           )
-        && request.resource.data.vehicleID is string
-        && request.resource.data.serviceType is string
-        && request.resource.data.mileage is int
-        && request.resource.data.cost is number;
-
-      allow update, delete: if isSignedIn();
+      allow read, delete: if isStaff();
+      allow create: if isStaff() && validLog() && vehicleExists(data().vehicleID);
+      allow update: if isStaff() && validLog();
     }
 
-    // Reusable service templates (e.g. "Oil change every 5000 mi").
+    // ---- Trips -------------------------------------------------------------
+    function validTrip() {
+      return data().vehicleID is string
+        && data().status in ['Active', 'Completed'];
+    }
+
+    match /trips/{tripId} {
+      allow read, delete: if isStaff();
+      allow create: if isStaff() && validTrip() && vehicleExists(data().vehicleID);
+      allow update: if isStaff() && validTrip();
+    }
+
+    // ---- Service templates -----------------------------------------------
+    function validTemplate() {
+      return data().serviceName is string
+        && data().mileageInterval is int
+        && data().mileageInterval > 0
+        && data().assignedVehicleIDs is list;
+    }
+
     match /serviceTemplates/{templateId} {
-      allow read: if isSignedIn();
-
-      allow create: if isSignedIn()
-        && request.resource.data.keys().hasAll(
-             ['serviceName', 'mileageInterval']
-           )
-        && request.resource.data.serviceName is string
-        && request.resource.data.mileageInterval is int;
-
-      allow update, delete: if isSignedIn();
+      allow read, delete: if isStaff();
+      allow create, update: if isStaff() && validTemplate();
     }
 
-    // Per-user records. A user may only access and delete their own document
-    // (needed so account deletion can clean up the user's data).
+    // ---- Per-user records ------------------------------------------------
+    // Account deletion removes /users/{uid}; each user touches only their own.
     match /users/{userId} {
-      allow read, write, delete: if isSignedIn() && request.auth.uid == userId;
+      allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
-    // Deny everything else by default.
+    // ---- Everything else is denied ---------------------------------------
     match /{document=**} {
       allow read, write: if false;
     }
