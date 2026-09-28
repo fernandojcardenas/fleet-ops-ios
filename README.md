@@ -113,3 +113,4 @@ Shipping and in use. Honest list of gaps and tech debt: [docs/known-issues.md](d
 ## License
 
 Copyright © 2026 FAJ Management LLC. All rights reserved. The source is published so it can be read and evaluated. It is not licensed for reuse. See [LICENSE](LICENSE).
+
