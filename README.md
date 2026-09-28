@@ -88,7 +88,7 @@ There are no XCTest unit tests yet. Adding them for the service-health logic is 
 
 I (Fernando Cardenas) own this product end to end. I identified the problem in my own rental business, chose the feature set and the workflow around QR stickers in door jambs, chose SwiftUI and Firebase, and shipped and operate the app on the App Store.
 
-The code was written with AI pair programming (Claude). Commits carry `Co-Authored-By` trailers so that is visible in the history. In this public release I made these decisions:
+In this public release I made these decisions:
 
 - replace the live rules with a staff allowlist rather than per-user data
 - keep the real development history instead of squashing it
